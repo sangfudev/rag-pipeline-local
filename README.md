@@ -3,9 +3,6 @@
 A fully local RAG pipeline orchestrated by **Semantic Kernel**.  
 No Azure. No API keys. No cloud costs.
 
-This project is the local equivalent of the AzureRag project.  
-The only file that differs between the two is `KernelFactory.cs`.
-
 ---
 
 ## Stack
