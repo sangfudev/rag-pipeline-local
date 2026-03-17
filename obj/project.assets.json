@@ -2260,11 +2260,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\AI\\RagDemoLocal\\LocalRagSK.csproj",
+      "projectUniqueName": "D:\\Private\\rag-pipeline-local\\LocalRagSK.csproj",
       "projectName": "LocalRagSK",
-      "projectPath": "D:\\AI\\RagDemoLocal\\LocalRagSK.csproj",
+      "projectPath": "D:\\Private\\rag-pipeline-local\\LocalRagSK.csproj",
       "packagesPath": "C:\\Users\\futek\\.nuget\\packages\\",
-      "outputPath": "D:\\AI\\RagDemoLocal\\obj\\",
+      "outputPath": "D:\\Private\\rag-pipeline-local\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files\\DevExpress 24.1\\Components\\Offline Packages",

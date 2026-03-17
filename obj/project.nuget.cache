@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "UG3RAlbhUIc=",
+  "dgSpecHash": "tqyYWQoUm0w=",
   "success": true,
-  "projectFilePath": "D:\\AI\\RagDemoLocal\\LocalRagSK.csproj",
+  "projectFilePath": "D:\\Private\\rag-pipeline-local\\LocalRagSK.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\futek\\.nuget\\packages\\azure.ai.openai\\2.8.0-beta.1\\azure.ai.openai.2.8.0-beta.1.nupkg.sha512",
     "C:\\Users\\futek\\.nuget\\packages\\azure.core\\1.50.0\\azure.core.1.50.0.nupkg.sha512",
