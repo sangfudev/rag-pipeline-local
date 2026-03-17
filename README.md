@@ -1,7 +1,8 @@
 # Local RAG — Semantic Kernel + Ollama + Qdrant
 
-A fully local RAG pipeline orchestrated by **Semantic Kernel**.  
+A fully local RAG pipeline orchestrated by **Semantic Kernel**. 
 No Azure. No API keys. No cloud costs.
+Note: Semantic Kernel will be replaced by Microsoft Agent Framework which is basically a fusion of Semantic Kernel and Autogen!
 
 ---
 
