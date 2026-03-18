@@ -1,7 +1,7 @@
 using LocalRagSK;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  LOCAL RAG — Semantic Kernel + Ollama + Qdrant
+//  LOCAL RAG — Microsoft.Extensions.AI (Agent Framework) + Ollama + Qdrant
 // ─────────────────────────────────────────────────────────────────────────────
 //
 //  Prerequisites:
@@ -65,7 +65,7 @@ switch (command)
 
     default:
         Console.WriteLine($"""
-            Local RAG — Semantic Kernel + Ollama ({config.ChatModel}) + Qdrant
+            Local RAG — Microsoft.Extensions.AI + Ollama ({config.ChatModel}) + Qdrant
             ────────────────────────────────────────────────────────────────────
             Commands:
               dotnet run ingest <path-to-pdf>      Index a PDF into Qdrant

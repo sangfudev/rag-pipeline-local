@@ -7,22 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <NoWarn>SKEXP0001;SKEXP0070;SKEXP0020</NoWarn>
-  </PropertyGroup>
-
   <ItemGroup>
-    <!-- Semantic Kernel core -->
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.73.0" />
+    <!-- Microsoft Agent Framework — lightweight AI abstractions (IChatClient, IEmbeddingGenerator) -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.6.0" />
 
-    <!-- Ollama connector (chat + embeddings) -->
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Ollama" Version="1.21.1-alpha" />
+    <!-- Ollama connector for Microsoft.Extensions.AI (preview tracks one minor ahead of stable) -->
+    <PackageReference Include="Microsoft.Extensions.AI.Ollama" Version="9.7.0-preview.1.25356.2" />
 
-    <!-- Qdrant memory store connector -->
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Qdrant" Version="1.21.1-alpha" />
-
-    <!-- SK memory abstraction (ISemanticTextMemory, SemanticTextMemory) -->
-    <PackageReference Include="Microsoft.SemanticKernel.Plugins.Memory" Version="1.21.1-alpha" />
+    <!-- Qdrant .NET client (gRPC) -->
+    <PackageReference Include="Qdrant.Client" Version="1.11.0" />
 
     <!-- PDF extraction -->
     <PackageReference Include="PdfPig" Version="0.1.13" />

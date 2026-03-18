@@ -1,21 +1,21 @@
-# Local RAG — Semantic Kernel + Ollama + Qdrant
+# Local RAG — Microsoft.Extensions.AI + Ollama + Qdrant
 
-A fully local RAG pipeline orchestrated by **Semantic Kernel**.  
+A fully local RAG pipeline built on **Microsoft.Extensions.AI** (Microsoft Agent Framework).
 No Azure. No API keys. No cloud costs.
 
-This project is the local equivalent of the AzureRag project.  
-The only file that differs between the two is `KernelFactory.cs`.
+**Note: running everything locally comes with a performance tradeoff. Retrieving a response from a query might take up to 10 minutes.**
 
 ---
 
 ## Stack
 
-| Layer | Local (this project) | Azure equivalent |
-|---|---|---|
-| **Orchestrator** | Semantic Kernel | Semantic Kernel |
-| **Chat LLM** | Ollama / phi | Azure OpenAI / gpt-4o |
-| **Embeddings** | Ollama / nomic-embed-text | Azure OpenAI / text-embedding-3-small |
-| **Vector store** | Qdrant (Docker) | Azure AI Search |
+| Layer | Technology |
+|---|---|
+| **AI abstractions** | Microsoft.Extensions.AI 9.6.0 (`IChatClient`, `IEmbeddingGenerator`) |
+| **Chat LLM** | Ollama / mistral (or any Ollama model) |
+| **Embeddings** | Ollama / nomic-embed-text (768 dimensions) |
+| **Vector store** | Qdrant (Docker, gRPC port 6334) |
+| **PDF extraction** | PdfPig |
 
 ---
 
@@ -29,7 +29,7 @@ Download from https://ollama.com, then pull the required models:
 
 ```bash
 ollama pull nomic-embed-text   # embedding model — 768 dimensions
-ollama pull phi            # chat model (or llama3, phi3, gemma2, etc.)
+ollama pull mistral            # chat model (or llama3, phi3, gemma2, etc.)
 ```
 
 ---
@@ -62,6 +62,12 @@ dotnet run query "What are the main conclusions?"
 dotnet run chat
 ```
 
+Each response prints timing and token usage in dark gray:
+
+```
+  [12.3s | in: 450 tok | out: 123 tok]
+```
+
 ---
 
 ## Project Structure
@@ -70,12 +76,12 @@ dotnet run chat
 LocalRagSK/
 ├── Program.cs            — Entry point, command routing
 ├── AppConfig.cs          — Strongly-typed config from appsettings.json
-├── KernelFactory.cs      — Wires SK to Ollama + Qdrant  ← only file that differs from Azure
-├── RagPipeline.cs        — Orchestrator: ingest, query, chat loop  [identical to Azure]
-├── RagPlugin.cs          — SK Plugin: [KernelFunction] search_documents  [identical to Azure]
-├── DocumentIngester.cs   — PDF → chunks → SK memory → Qdrant  [identical to Azure]
-├── PdfExtractor.cs       — PDF text extraction via PdfPig  [identical to Azure]
-├── TextChunker.cs        — Overlapping word-based chunking  [identical to Azure]
+├── KernelFactory.cs      — AgentServices: wires IChatClient, IEmbeddingGenerator, QdrantClient
+├── RagPipeline.cs        — Orchestrator: ingest, query, chat loop (with timing + token stats)
+├── RagPlugin.cs          — Vector search: embed query → Qdrant similarity search
+├── DocumentIngester.cs   — PDF → chunks → embed → upsert into Qdrant
+├── PdfExtractor.cs       — PDF text extraction via PdfPig
+├── TextChunker.cs        — Overlapping word-based chunking
 ├── appsettings.json      — Configuration (localhost, no secrets)
 ├── docker-compose.yml    — Starts Qdrant container
 └── LocalRagSK.csproj     — NuGet dependencies
@@ -83,22 +89,20 @@ LocalRagSK/
 
 ---
 
-## How Semantic Kernel Is Used
+## How Microsoft.Extensions.AI Is Used
 
-| SK Feature | Where Used |
+| MEAI Feature | Where Used |
 |---|---|
-| `Kernel.CreateBuilder()` | `KernelFactory.CreateKernel()` — registers Ollama services |
-| `AddOllamaChatCompletion()` | Chat with mistral/llama3/phi3 locally |
-| `AddOllamaTextEmbeddingGeneration()` | Embeds text via nomic-embed-text locally |
-| `QdrantMemoryStore` | Local vector store — no cloud needed |
-| `SemanticTextMemory` | Combines Qdrant store + Ollama embeddings |
-| `memory.SaveInformationAsync()` | `DocumentIngester` — embed + store chunks |
-| `memory.SearchAsync()` | `RagPlugin` — retrieve relevant chunks |
-| `[KernelFunction]` attribute | `RagPlugin.SearchDocumentsAsync()` — registered as a plugin |
-| `CreateFunctionFromPrompt()` | RAG answer prompt template with `{{$context}}` |
-| `KernelArguments` | Injects retrieved context into the prompt |
-| `ChatHistory` | Tracks conversation for follow-up questions |
-| `GetStreamingChatMessageContentsAsync()` | Streams response tokens to console |
+| `IChatClient` | `RagPipeline` — chat completion via `GetResponseAsync` / `GetStreamingResponseAsync` |
+| `IEmbeddingGenerator<string, Embedding<float>>` | `RagPlugin` + `DocumentIngester` — embed queries and chunks |
+| `OllamaChatClient` | `AgentServices.CreateChatClient()` — backed by local Ollama |
+| `OllamaEmbeddingGenerator` | `AgentServices.CreateEmbeddingGenerator()` — backed by local Ollama |
+| `ChatMessage` / `ChatRole` | `RagPipeline` — builds message history for each turn |
+| `ChatResponse.Text` | `QueryAsync` — extracts the answer text |
+| `ChatResponse.Usage` | `QueryAsync` — reads `InputTokenCount` / `OutputTokenCount` |
+| `GetStreamingResponseAsync` | `ChatLoopAsync` — streams tokens to console |
+| `ToChatResponse(updates)` | `ChatLoopAsync` — coalesces stream into a `ChatResponse` for usage stats |
+| `QdrantClient` | `RagPlugin` + `DocumentIngester` — direct gRPC connection to Qdrant |
 
 ---
 
@@ -115,7 +119,7 @@ Edit `appsettings.json`:
 }
 ```
 
-> ⚠️ If you change `EmbeddingModel`, you **must** also update `Rag:VectorDimensions`  
+> **Warning:** If you change `EmbeddingModel`, you **must** also update `Rag:VectorDimensions`
 > and recreate the Qdrant collection (delete `qdrant_storage/` and re-ingest).
 
 ### Common embedding models and their dimensions
@@ -128,17 +132,20 @@ Edit `appsettings.json`:
 
 ---
 
-## Migrating to Azure
+## Configuration Reference
 
-To switch this project to Azure services, replace only `KernelFactory.cs`:
+All settings live in `appsettings.json` and can be overridden with environment variables.
 
-```csharp
-// Replace Ollama with Azure OpenAI
-builder.AddAzureOpenAIChatCompletion(deploymentName, endpoint, apiKey);
-builder.AddAzureOpenAITextEmbeddingGeneration(deploymentName, endpoint, apiKey);
-
-// Replace Qdrant with Azure AI Search
-var memoryStore = new AzureAISearchMemoryStore(indexClient);
-```
-
-Every other file — `RagPipeline`, `RagPlugin`, `DocumentIngester`, `TextChunker`, `PdfExtractor` — stays byte-for-byte identical. That's the value of SK's abstraction layer.
+| Key | Default | Description |
+|---|---|---|
+| `Ollama:BaseUrl` | `http://localhost:11434` | Ollama server URL |
+| `Ollama:ChatModel` | `mistral` | Chat model name |
+| `Ollama:EmbeddingModel` | `nomic-embed-text` | Embedding model name |
+| `Qdrant:Host` | `localhost` | Qdrant host |
+| `Qdrant:Port` | `6334` | Qdrant **gRPC** port (not the REST port 6333) |
+| `Qdrant:CollectionName` | `documents` | Vector collection name |
+| `Rag:VectorDimensions` | `768` | Must match the embedding model output size |
+| `Rag:ChunkSize` | `400` | Words per chunk |
+| `Rag:ChunkOverlap` | `50` | Overlapping words between chunks |
+| `Rag:TopK` | `3` | Number of chunks retrieved per query |
+| `Rag:MinRelevance` | `0.5` | Minimum cosine similarity score (0–1) |

@@ -1,33 +1,40 @@
-using Microsoft.SemanticKernel.Memory;
+using Microsoft.Extensions.AI;
+using Qdrant.Client;
+using Qdrant.Client.Grpc;
 
 namespace LocalRagSK;
 
 /// <summary>
-/// Ingests PDFs into Qdrant via Semantic Kernel's memory abstraction.
+/// Ingests PDFs into Qdrant via Microsoft.Extensions.AI.
 ///
-/// SK's SaveInformationAsync handles embedding generation internally —
-/// it calls the Ollama embedding model and stores the resulting vector
-/// in Qdrant automatically. You just pass plain text.
+/// Process per chunk:
+///   1. Call IEmbeddingGenerator to embed the text via Ollama
+///   2. Build a PointStruct with the vector + payload metadata
+///   3. Batch-upsert all points into Qdrant
 ///
-/// This file is identical to the Azure version — the underlying store
-/// (Qdrant vs Azure AI Search) is transparent to this class.
+/// Uses a deterministic SHA-256-derived point ID so re-ingesting
+/// the same file safely overwrites existing vectors rather than duplicating them.
 /// </summary>
 public class DocumentIngester
 {
-    private readonly ISemanticTextMemory _memory;
-    private readonly AppConfig           _config;
+    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
+    private readonly QdrantClient _qdrantClient;
+    private readonly AppConfig    _config;
 
-    public DocumentIngester(ISemanticTextMemory memory, AppConfig config)
+    public DocumentIngester(
+        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+        QdrantClient qdrantClient,
+        AppConfig config)
     {
-        _memory = memory;
-        _config = config;
+        _embeddingGenerator = embeddingGenerator;
+        _qdrantClient       = qdrantClient;
+        _config             = config;
     }
 
     public async Task IngestAsync(string pdfPath)
     {
         Console.WriteLine($"\n── Ingesting: {Path.GetFileName(pdfPath)} ──────────────────");
 
-        // 1. Extract raw text from the PDF
         var text = PdfExtractor.ExtractText(pdfPath);
 
         if (string.IsNullOrWhiteSpace(text))
@@ -36,37 +43,70 @@ public class DocumentIngester
             return;
         }
 
-        // 2. Split into overlapping chunks
         var chunks = TextChunker.Chunk(
             text,
             Path.GetFileName(pdfPath),
             _config.ChunkSize,
             _config.ChunkOverlap);
 
-        // 3. Save each chunk to Qdrant via SK memory
-        //    Internally SK:
-        //      a) calls Ollama nomic-embed-text to embed chunk.Text → float[]
-        //      b) upserts the vector + text into Qdrant
-        Console.WriteLine($"  Embedding and storing {chunks.Count} chunks via Semantic Kernel...");
+        await EnsureCollectionAsync();
+
+        Console.WriteLine($"  Embedding and storing {chunks.Count} chunks via Microsoft.Extensions.AI...");
         Console.WriteLine($"  (Ollama model: {_config.EmbeddingModel} → Qdrant on {_config.QdrantHost}:{_config.QdrantPort})");
 
         int saved = 0;
+        var points = new List<PointStruct>(chunks.Count);
 
         foreach (var chunk in chunks)
         {
-            await _memory.SaveInformationAsync(
-                collection:         _config.CollectionName,  // Qdrant collection name
-                text:               chunk.Text,              // SK embeds this with Ollama
-                id:                 chunk.Id,                // unique key — safe to re-ingest
-                description:        chunk.Source,            // stored as metadata (filename)
-                additionalMetadata: chunk.ChunkIndex.ToString());
+            var vector = (await _embeddingGenerator.GenerateAsync([chunk.Text]))[0].Vector;
+
+            var point = new PointStruct
+            {
+                Id      = DeterministicId(chunk.Id),
+                Vectors = vector.ToArray()
+            };
+            point.Payload["id"]         = chunk.Id;
+            point.Payload["text"]       = chunk.Text;
+            point.Payload["source"]     = chunk.Source;
+            point.Payload["chunkIndex"] = chunk.ChunkIndex;
+
+            points.Add(point);
 
             saved++;
             if (saved % 5 == 0 || saved == chunks.Count)
                 Console.Write($"\r  Progress: {saved}/{chunks.Count}   ");
         }
 
+        await _qdrantClient.UpsertAsync(_config.CollectionName, points);
+
         Console.WriteLine();
-        Console.WriteLine($"\n  ✓ Done. '{Path.GetFileName(pdfPath)}' is searchable in Qdrant.\n");
+        Console.WriteLine($"\n  Done. '{Path.GetFileName(pdfPath)}' is searchable in Qdrant.\n");
+    }
+
+    private async Task EnsureCollectionAsync()
+    {
+        var collections = await _qdrantClient.ListCollectionsAsync();
+        if (collections.Any(c => c == _config.CollectionName))
+            return;
+
+        await _qdrantClient.CreateCollectionAsync(
+            _config.CollectionName,
+            new VectorParams
+            {
+                Size     = (ulong)_config.VectorDimensions,
+                Distance = Distance.Cosine
+            });
+    }
+
+    /// <summary>
+    /// Derives a stable ulong point ID from the chunk's string ID using SHA-256.
+    /// Re-ingesting the same file produces the same IDs, enabling safe overwrites.
+    /// </summary>
+    private static ulong DeterministicId(string chunkId)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(chunkId);
+        var hash  = System.Security.Cryptography.SHA256.HashData(bytes);
+        return BitConverter.ToUInt64(hash, 0);
     }
 }

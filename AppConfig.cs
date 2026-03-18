@@ -10,7 +10,7 @@ public class AppConfig
 {
     // ── Ollama ────────────────────────────────────────────────────────────────
     public string OllamaBaseUrl     { get; init; } = "http://localhost:11434";
-    public string ChatModel         { get; init; } = "phi";
+    public string ChatModel         { get; init; } = "mistral";
     public string EmbeddingModel    { get; init; } = "nomic-embed-text";
 
     // ── Qdrant ────────────────────────────────────────────────────────────────
@@ -19,11 +19,11 @@ public class AppConfig
     public string CollectionName    { get; init; } = "documents";
 
     // ── RAG tuning ────────────────────────────────────────────────────────────
-    public int    VectorDimensions  { get; init; } = 400;   // nomic-embed-text = 768
-    public int    ChunkSize         { get; init; } = 300;
-    public int    ChunkOverlap      { get; init; } = 50;
-    public int    TopK              { get; init; } = 2;
-    public double MinRelevance      { get; init; } = 0.5d;
+    public int    VectorDimensions  { get; init; } = 768;   // nomic-embed-text = 768
+    public int    ChunkSize         { get; init; } = 500;
+    public int    ChunkOverlap      { get; init; } = 75;
+    public int    TopK              { get; init; } = 4;
+    public double MinRelevance      { get; init; } = 0.75d;
 
     public static AppConfig Load()
     {
@@ -36,7 +36,7 @@ public class AppConfig
         return new AppConfig
         {
             OllamaBaseUrl    = configuration["Ollama:BaseUrl"]        ?? "http://localhost:11434",
-            ChatModel        = configuration["Ollama:ChatModel"]       ?? "phi",
+            ChatModel        = configuration["Ollama:ChatModel"]       ?? "mistral",
             EmbeddingModel   = configuration["Ollama:EmbeddingModel"]  ?? "nomic-embed-text",
 
             QdrantHost       = configuration["Qdrant:Host"]            ?? "localhost",
