@@ -10,7 +10,7 @@ public class AppConfig
 {
     // ── Ollama ────────────────────────────────────────────────────────────────
     public string OllamaBaseUrl     { get; init; } = "http://localhost:11434";
-    public string ChatModel         { get; init; } = "mistral";
+    public string ChatModel         { get; init; } = "phi3:mini";
     public string EmbeddingModel    { get; init; } = "nomic-embed-text";
 
     // ── Qdrant ────────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ public class AppConfig
         return new AppConfig
         {
             OllamaBaseUrl    = configuration["Ollama:BaseUrl"]        ?? "http://localhost:11434",
-            ChatModel        = configuration["Ollama:ChatModel"]       ?? "mistral",
+            ChatModel        = configuration["Ollama:ChatModel"]       ?? "phi3:mini",
             EmbeddingModel   = configuration["Ollama:EmbeddingModel"]  ?? "nomic-embed-text",
 
             QdrantHost       = configuration["Qdrant:Host"]            ?? "localhost",
