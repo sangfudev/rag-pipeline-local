@@ -1,27 +1,27 @@
-using Microsoft.Extensions.AI;
+using Microsoft.SemanticKernel.Embeddings;
 using Qdrant.Client;
 
 namespace LocalRagSK;
 
 /// <summary>
 /// Performs vector similarity search against Qdrant.
-/// Embeds the query with IEmbeddingGenerator, searches the collection,
+/// Embeds the query with ITextEmbeddingGenerationService, searches the collection,
 /// and returns formatted context text ready to inject into a prompt.
 /// </summary>
 public class RagPlugin
 {
-    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
+    private readonly ITextEmbeddingGenerationService _embeddingService;
     private readonly QdrantClient _qdrantClient;
     private readonly AppConfig    _config;
 
     public RagPlugin(
-        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+        ITextEmbeddingGenerationService embeddingService,
         QdrantClient qdrantClient,
         AppConfig config)
     {
-        _embeddingGenerator = embeddingGenerator;
-        _qdrantClient       = qdrantClient;
-        _config             = config;
+        _embeddingService = embeddingService;
+        _qdrantClient     = qdrantClient;
+        _config           = config;
     }
 
     /// <summary>
@@ -32,10 +32,12 @@ public class RagPlugin
     {
         Console.WriteLine($"  [RagPlugin] Searching Qdrant for: '{query}'");
 
-        var vector  = (await _embeddingGenerator.GenerateAsync([query]))[0].Vector;
+        var embeddings = await _embeddingService.GenerateEmbeddingsAsync([query]);
+        var vector     = embeddings[0].ToArray();
+
         var results = await _qdrantClient.SearchAsync(
             collectionName: _config.CollectionName,
-            vector:         vector.ToArray(),
+            vector:         vector,
             limit:          (ulong)_config.TopK,
             scoreThreshold: (float)_config.MinRelevance);
 

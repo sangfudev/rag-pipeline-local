@@ -3,7 +3,8 @@
 A fully local RAG pipeline built on **Microsoft.Extensions.AI** (Microsoft Agent Framework).
 No Azure. No API keys. No cloud costs.
 
-**Note: running everything locally comes with a performance tradeoff. Retrieving a response from a query might take up to 10 minutes.**
+**Note:
+Running everything locally comes with a performance tradeoff. Retrieving a response from a query might take up to 10 minutes.**
 
 ---
 

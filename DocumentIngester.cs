@@ -1,14 +1,14 @@
-using Microsoft.Extensions.AI;
+using Microsoft.SemanticKernel.Embeddings;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
 
 namespace LocalRagSK;
 
 /// <summary>
-/// Ingests PDFs into Qdrant via Microsoft.Extensions.AI.
+/// Ingests PDFs into Qdrant via Semantic Kernel's ITextEmbeddingGenerationService.
 ///
 /// Process per chunk:
-///   1. Call IEmbeddingGenerator to embed the text via Ollama
+///   1. Call ITextEmbeddingGenerationService to embed the text via Ollama
 ///   2. Build a PointStruct with the vector + payload metadata
 ///   3. Batch-upsert all points into Qdrant
 ///
@@ -17,18 +17,18 @@ namespace LocalRagSK;
 /// </summary>
 public class DocumentIngester
 {
-    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
+    private readonly ITextEmbeddingGenerationService _embeddingService;
     private readonly QdrantClient _qdrantClient;
     private readonly AppConfig    _config;
 
     public DocumentIngester(
-        IEmbeddingGenerator<string, Embedding<float>> embeddingGenerator,
+        ITextEmbeddingGenerationService embeddingService,
         QdrantClient qdrantClient,
         AppConfig config)
     {
-        _embeddingGenerator = embeddingGenerator;
-        _qdrantClient       = qdrantClient;
-        _config             = config;
+        _embeddingService = embeddingService;
+        _qdrantClient     = qdrantClient;
+        _config           = config;
     }
 
     public async Task IngestAsync(string pdfPath)
@@ -51,7 +51,7 @@ public class DocumentIngester
 
         await EnsureCollectionAsync();
 
-        Console.WriteLine($"  Embedding and storing {chunks.Count} chunks via Microsoft.Extensions.AI...");
+        Console.WriteLine($"  Embedding and storing {chunks.Count} chunks via Semantic Kernel...");
         Console.WriteLine($"  (Ollama model: {_config.EmbeddingModel} → Qdrant on {_config.QdrantHost}:{_config.QdrantPort})");
 
         int saved = 0;
@@ -59,12 +59,13 @@ public class DocumentIngester
 
         foreach (var chunk in chunks)
         {
-            var vector = (await _embeddingGenerator.GenerateAsync([chunk.Text]))[0].Vector;
+            var embeddings = await _embeddingService.GenerateEmbeddingsAsync([chunk.Text]);
+            var vector     = embeddings[0].ToArray();
 
             var point = new PointStruct
             {
                 Id      = DeterministicId(chunk.Id),
-                Vectors = vector.ToArray()
+                Vectors = vector
             };
             point.Payload["id"]         = chunk.Id;
             point.Payload["text"]       = chunk.Text;

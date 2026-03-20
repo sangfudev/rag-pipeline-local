@@ -1,34 +1,34 @@
-using Microsoft.Extensions.AI;
+using Microsoft.SemanticKernel;
 using Qdrant.Client;
 
 namespace LocalRagSK;
 
 /// <summary>
-/// Builds and configures the Microsoft.Extensions.AI services:
-///   - OllamaChatClient        (IChatClient)
-///   - OllamaEmbeddingGenerator (IEmbeddingGenerator)
-///   - QdrantClient            (vector database via gRPC on port 6334)
+/// Builds and configures Semantic Kernel with Ollama connectors:
+///   - OllamaChatCompletion           (IChatCompletionService)
+///   - OllamaTextEmbeddingGeneration  (ITextEmbeddingGenerationService)
+///   - QdrantClient                   (vector database via gRPC on port 6334)
 /// </summary>
-public static class AgentServices
+public static class KernelFactory
 {
     /// <summary>
-    /// Creates an IChatClient backed by a local Ollama model.
+    /// Creates a Kernel pre-configured with Ollama chat and embedding services.
     /// Uses a 10-minute timeout — local models can be slow, especially on CPU.
     /// </summary>
-    public static IChatClient CreateChatClient(AppConfig config)
+    public static Kernel CreateKernel(AppConfig config)
     {
-        var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        return new OllamaChatClient(new Uri(config.OllamaBaseUrl), config.ChatModel, httpClient);
-    }
+        // The HttpClient overload uses BaseAddress as the Ollama endpoint.
+        // A 10-minute timeout is set here because local models can be slow on CPU.
+        var httpClient = new HttpClient
+        {
+            BaseAddress = new Uri(config.OllamaBaseUrl),
+            Timeout     = TimeSpan.FromMinutes(10)
+        };
 
-    /// <summary>
-    /// Creates an IEmbeddingGenerator backed by Ollama (nomic-embed-text by default).
-    /// Must use the same model as ingest — vectors must share the same dimensions.
-    /// </summary>
-    public static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(AppConfig config)
-    {
-        var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        return new OllamaEmbeddingGenerator(new Uri(config.OllamaBaseUrl), config.EmbeddingModel, httpClient);
+        return Kernel.CreateBuilder()
+            .AddOllamaChatCompletion(config.ChatModel, httpClient)
+            .AddOllamaTextEmbeddingGeneration(config.EmbeddingModel, httpClient)
+            .Build();
     }
 
     /// <summary>
