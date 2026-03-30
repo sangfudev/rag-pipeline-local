@@ -28,15 +28,16 @@ public class RagPlugin
     /// Searches the vector store for chunks relevant to the query.
     /// Returns a formatted string of matching passages with source and relevance score.
     /// </summary>
-    public async Task<string> SearchDocumentsAsync(string query)
+    public async Task<string> SearchDocumentsAsync(string query, string? collectionName = null)
     {
         Console.WriteLine($"  [RagPlugin] Searching Qdrant for: '{query}'");
 
+        var collection = collectionName ?? _config.CollectionName;
         var embeddings = await _embeddingService.GenerateEmbeddingsAsync([query]);
         var vector     = embeddings[0].ToArray();
 
         var results = await _qdrantClient.SearchAsync(
-            collectionName: _config.CollectionName,
+            collectionName: collection,
             vector:         vector,
             limit:          (ulong)_config.TopK,
             scoreThreshold: (float)_config.MinRelevance);

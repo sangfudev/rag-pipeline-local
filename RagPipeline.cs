@@ -44,10 +44,10 @@ public class RagPipeline
 
     // ── Ingest ────────────────────────────────────────────────────────────────
 
-    public async Task IngestAsync(string pdfPath)
+    public async Task IngestAsync(string pdfPath, string? collectionName = null)
     {
         var ingester = new DocumentIngester(_embeddingService, _qdrantClient, _config);
-        await ingester.IngestAsync(pdfPath);
+        await ingester.IngestAsync(pdfPath, collectionName);
     }
 
     // ── Single query ──────────────────────────────────────────────────────────
@@ -57,13 +57,13 @@ public class RagPipeline
     ///   1. Retrieve relevant chunks from Qdrant via RagPlugin
     ///   2. Send context + question to the chat model and return the answer
     /// </summary>
-    public async Task<string> QueryAsync(string question)
+    public async Task<string> QueryAsync(string question, string? collectionName = null)
     {
         Console.WriteLine($"\n── Query ──────────────────────────────────────────────");
         Console.WriteLine($"  Q: {question}");
         Console.WriteLine($"  Retrieving context from Qdrant...");
 
-        var context = await _ragPlugin.SearchDocumentsAsync(question);
+        var context = await _ragPlugin.SearchDocumentsAsync(question, collectionName);
 
         if (context == "No relevant documents found.")
             return "No relevant documents found. Have you ingested any PDFs yet?";
@@ -97,14 +97,16 @@ public class RagPipeline
     /// Each turn streams tokens to the console in real time.
     /// Token counts are read from the last streaming chunk's metadata.
     /// </summary>
-    public async Task ChatLoopAsync()
+    public async Task ChatLoopAsync(string? collectionName = null)
     {
+        var collection = collectionName ?? _config.CollectionName;
         Console.WriteLine($"""
 
             ── Local RAG Chat (Semantic Kernel) ────────────────────
               LLM:        Ollama / {_config.ChatModel}
               Embeddings: Ollama / {_config.EmbeddingModel}
               Vector DB:  Qdrant on {_config.QdrantHost}:{_config.QdrantPort}
+              Collection: {collection}
               Type your question and press Enter.
               Type 'exit' to quit.
             ────────────────────────────────────────────────────────
@@ -122,7 +124,7 @@ public class RagPipeline
             if (input.Equals("exit", StringComparison.OrdinalIgnoreCase)) break;
 
             Console.WriteLine("  Searching Qdrant...");
-            var context = await _ragPlugin.SearchDocumentsAsync(input);
+            var context = await _ragPlugin.SearchDocumentsAsync(input, collection);
 
             history.AddUserMessage(
                 $"""

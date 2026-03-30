@@ -1,10 +1,10 @@
-# Local RAG — Microsoft.Extensions.AI + Ollama + Qdrant
+# Local RAG — Semantic Kernel + Ollama + Qdrant
 
-A fully local RAG pipeline built on **Microsoft.Extensions.AI** (Microsoft Agent Framework).
+A fully local RAG pipeline built on **Microsoft Semantic Kernel**.
 No Azure. No API keys. No cloud costs.
 
 **Note:
-Running everything locally comes with a performance tradeoff. Retrieving a response from a query might take up to 10 minutes.**
+Running everything locally without adequate GPU comes with a performance tradeoff. Retrieving a response from a query might take up to several minutes.**
 
 ---
 
@@ -12,8 +12,8 @@ Running everything locally comes with a performance tradeoff. Retrieving a respo
 
 | Layer | Technology |
 |---|---|
-| **AI abstractions** | Microsoft.Extensions.AI 9.6.0 (`IChatClient`, `IEmbeddingGenerator`) |
-| **Chat LLM** | Ollama / mistral (or any Ollama model) |
+| **AI abstractions** | Microsoft.SemanticKernel (`IChatCompletionService`, `ITextEmbeddingGenerationService`) |
+| **Chat LLM** | Ollama / phi3:mini (or any Ollama model) |
 | **Embeddings** | Ollama / nomic-embed-text (768 dimensions) |
 | **Vector store** | Qdrant (Docker, gRPC port 6334) |
 | **PDF extraction** | PdfPig |
@@ -30,7 +30,7 @@ Download from https://ollama.com, then pull the required models:
 
 ```bash
 ollama pull nomic-embed-text   # embedding model — 768 dimensions
-ollama pull mistral            # chat model (or llama3, phi3, gemma2, etc.)
+ollama pull phi3:mini          # chat model (or llama3, mistral, gemma2, etc.)
 ```
 
 ---
@@ -52,15 +52,17 @@ Qdrant dashboard: http://localhost:6333/dashboard
 ## Usage
 
 ```bash
-# Index one or more PDFs
+# Index a PDF (prompts for collection name if omitted)
 dotnet run ingest "my-document.pdf"
-dotnet run ingest "another-document.pdf"
+dotnet run ingest "my-document.pdf" my-collection
 
 # Ask a single question
 dotnet run query "What are the main conclusions?"
+dotnet run query "What are the main conclusions?" my-collection
 
-# Interactive chat with conversation history
+# Interactive chat with conversation history (prompts for collection name if omitted)
 dotnet run chat
+dotnet run chat my-collection
 ```
 
 Each response prints timing and token usage in dark gray:
@@ -77,7 +79,7 @@ Each response prints timing and token usage in dark gray:
 LocalRagSK/
 ├── Program.cs            — Entry point, command routing
 ├── AppConfig.cs          — Strongly-typed config from appsettings.json
-├── KernelFactory.cs      — AgentServices: wires IChatClient, IEmbeddingGenerator, QdrantClient
+├── KernelFactory.cs      — Builds Semantic Kernel with Ollama chat + embedding connectors and QdrantClient
 ├── RagPipeline.cs        — Orchestrator: ingest, query, chat loop (with timing + token stats)
 ├── RagPlugin.cs          — Vector search: embed query → Qdrant similarity search
 ├── DocumentIngester.cs   — PDF → chunks → embed → upsert into Qdrant
@@ -90,19 +92,16 @@ LocalRagSK/
 
 ---
 
-## How Microsoft.Extensions.AI Is Used
+## How Semantic Kernel Is Used
 
-| MEAI Feature | Where Used |
+| SK Feature | Where Used |
 |---|---|
-| `IChatClient` | `RagPipeline` — chat completion via `GetResponseAsync` / `GetStreamingResponseAsync` |
-| `IEmbeddingGenerator<string, Embedding<float>>` | `RagPlugin` + `DocumentIngester` — embed queries and chunks |
-| `OllamaChatClient` | `AgentServices.CreateChatClient()` — backed by local Ollama |
-| `OllamaEmbeddingGenerator` | `AgentServices.CreateEmbeddingGenerator()` — backed by local Ollama |
-| `ChatMessage` / `ChatRole` | `RagPipeline` — builds message history for each turn |
-| `ChatResponse.Text` | `QueryAsync` — extracts the answer text |
-| `ChatResponse.Usage` | `QueryAsync` — reads `InputTokenCount` / `OutputTokenCount` |
-| `GetStreamingResponseAsync` | `ChatLoopAsync` — streams tokens to console |
-| `ToChatResponse(updates)` | `ChatLoopAsync` — coalesces stream into a `ChatResponse` for usage stats |
+| `IChatCompletionService` | `RagPipeline` — chat completion via `GetChatMessageContentAsync` / `GetStreamingChatMessageContentsAsync` |
+| `ITextEmbeddingGenerationService` | `RagPlugin` + `DocumentIngester` — embed queries and chunks |
+| `OllamaChatCompletion` | `KernelFactory.CreateKernel()` — backed by local Ollama |
+| `OllamaTextEmbeddingGeneration` | `KernelFactory.CreateKernel()` — backed by local Ollama |
+| `ChatHistory` / `ChatMessageContent` | `RagPipeline` — builds message history for each turn |
+| `GetStreamingChatMessageContentsAsync` | `ChatLoopAsync` — streams tokens to console |
 | `QdrantClient` | `RagPlugin` + `DocumentIngester` — direct gRPC connection to Qdrant |
 
 ---
@@ -114,7 +113,7 @@ Edit `appsettings.json`:
 ```json
 {
   "Ollama": {
-    "ChatModel":      "llama3",          // or phi3, gemma2, codellama
+    "ChatModel":      "llama3",          // or phi3:mini, mistral, gemma2, codellama
     "EmbeddingModel": "nomic-embed-text" // keep this unless you change VectorDimensions
   }
 }
@@ -140,7 +139,7 @@ All settings live in `appsettings.json` and can be overridden with environment v
 | Key | Default | Description |
 |---|---|---|
 | `Ollama:BaseUrl` | `http://localhost:11434` | Ollama server URL |
-| `Ollama:ChatModel` | `mistral` | Chat model name |
+| `Ollama:ChatModel` | `phi3:mini` | Chat model name |
 | `Ollama:EmbeddingModel` | `nomic-embed-text` | Embedding model name |
 | `Qdrant:Host` | `localhost` | Qdrant host |
 | `Qdrant:Port` | `6334` | Qdrant **gRPC** port (not the REST port 6333) |
@@ -148,5 +147,5 @@ All settings live in `appsettings.json` and can be overridden with environment v
 | `Rag:VectorDimensions` | `768` | Must match the embedding model output size |
 | `Rag:ChunkSize` | `400` | Words per chunk |
 | `Rag:ChunkOverlap` | `50` | Overlapping words between chunks |
-| `Rag:TopK` | `3` | Number of chunks retrieved per query |
+| `Rag:TopK` | `5` | Number of chunks retrieved per query |
 | `Rag:MinRelevance` | `0.5` | Minimum cosine similarity score (0–1) |

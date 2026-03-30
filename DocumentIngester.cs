@@ -31,8 +31,9 @@ public class DocumentIngester
         _config           = config;
     }
 
-    public async Task IngestAsync(string pdfPath)
+    public async Task IngestAsync(string pdfPath, string? collectionName = null)
     {
+        var collection = collectionName ?? _config.CollectionName;
         Console.WriteLine($"\n── Ingesting: {Path.GetFileName(pdfPath)} ──────────────────");
 
         var text = PdfExtractor.ExtractText(pdfPath);
@@ -49,8 +50,9 @@ public class DocumentIngester
             _config.ChunkSize,
             _config.ChunkOverlap);
 
-        await EnsureCollectionAsync();
+        await EnsureCollectionAsync(collection);
 
+        Console.WriteLine($"  Collection:    {collection}");
         Console.WriteLine($"  Embedding and storing {chunks.Count} chunks via Semantic Kernel...");
         Console.WriteLine($"  (Ollama model: {_config.EmbeddingModel} → Qdrant on {_config.QdrantHost}:{_config.QdrantPort})");
 
@@ -79,20 +81,20 @@ public class DocumentIngester
                 Console.Write($"\r  Progress: {saved}/{chunks.Count}   ");
         }
 
-        await _qdrantClient.UpsertAsync(_config.CollectionName, points);
+        await _qdrantClient.UpsertAsync(collection, points);
 
         Console.WriteLine();
         Console.WriteLine($"\n  Done. '{Path.GetFileName(pdfPath)}' is searchable in Qdrant.\n");
     }
 
-    private async Task EnsureCollectionAsync()
+    private async Task EnsureCollectionAsync(string collection)
     {
         var collections = await _qdrantClient.ListCollectionsAsync();
-        if (collections.Any(c => c == _config.CollectionName))
+        if (collections.Any(c => c == collection))
             return;
 
         await _qdrantClient.CreateCollectionAsync(
-            _config.CollectionName,
+            collection,
             new VectorParams
             {
                 Size     = (ulong)_config.VectorDimensions,
